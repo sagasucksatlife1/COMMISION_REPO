@@ -81,6 +81,12 @@ def create_user(request: CreateUserRequest, _: dict = Depends(require_admin)):
 def get_employees(_: dict = Depends(require_admin)):
     return {"employees": db.get_all_employees()}
 
+@app.delete("/api/users/{user_id}")
+def delete_user(user_id: int, _: dict = Depends(require_admin)):
+    if not db.delete_user(user_id):
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"message": "User deleted"}
+
 @app.post("/api/commissions/create")
 def create_commission(request: CommissionRequest, current_user: dict = Depends(get_current_user)):
     commission_id = db.create_commission(current_user["user_id"], request.sale_date, request.unlisted_sales, request.loans, request.third_party_sales)
