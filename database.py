@@ -114,7 +114,7 @@ class Database:
         conn.close()
     
     def create_commission(self, user_id, sale_date, unlisted_sales, loans, third_party_sales):
-        calculated_commission = (loans / 3) + (unlisted_sales / 3) + (third_party_sales * 100)
+        calculated_commission = (loans / 3) + (unlisted_sales / 3) + (third_party_sales)
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute('INSERT INTO commissions (user_id, sale_date, unlisted_sales, loans, third_party_sales, calculated_commission) VALUES (?, ?, ?, ?, ?, ?)',
@@ -125,7 +125,7 @@ class Database:
         return commission_id
     
     def update_commission(self, commission_id, user_id, sale_date, unlisted_sales, loans, third_party_sales):
-        calculated_commission = (loans / 3) + (unlisted_sales / 3) + (third_party_sales * 100)
+        calculated_commission = (loans / 3) + (unlisted_sales / 3) + (third_party_sales)
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute('UPDATE commissions SET sale_date=?, unlisted_sales=?, loans=?, third_party_sales=?, calculated_commission=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id=?',
