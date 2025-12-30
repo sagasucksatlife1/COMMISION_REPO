@@ -4,7 +4,7 @@ import hashlib
 import secrets
 
 class Database:
-    def __init__(self, db_name="/data/commission_system.db"):
+    def __init__(self, db_name="/tmp/commission_system.db"):
         self.db_name = db_name
         self.init_db()
     
