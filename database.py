@@ -182,3 +182,18 @@ class Database:
         employees = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return employees
+
+def delete_user(self, user_id):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        # First delete all commissions by this user
+        cursor.execute('DELETE FROM commissions WHERE user_id=?', (user_id,))
+        # Then delete all sessions by this user
+        cursor.execute('DELETE FROM sessions WHERE user_id=?', (user_id,))
+        # Finally delete the user
+        cursor.execute('DELETE FROM users WHERE id=? AND role="employee"', (user_id,))
+        conn.commit()
+        affected = cursor.rowcount
+        conn.close()
+        return affected > 0
+    
