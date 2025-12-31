@@ -4,7 +4,7 @@ import hashlib
 import secrets
 
 class Database:
-    def __init__(self, db_name="/tmp/commission_system.db"):
+    def __init__(self, db_name="/data/commission_system.db"):  # Changed to /data/ for Render
         self.db_name = db_name
         self.init_db()
     
@@ -114,7 +114,7 @@ class Database:
         conn.close()
     
     def create_commission(self, user_id, sale_date, unlisted_sales, loans, third_party_sales):
-        calculated_commission = (loans / 3) + (unlisted_sales / 3) + (third_party_sales)
+        calculated_commission = (loans / 3) + (unlisted_sales / 3) + third_party_sales
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute('INSERT INTO commissions (user_id, sale_date, unlisted_sales, loans, third_party_sales, calculated_commission) VALUES (?, ?, ?, ?, ?, ?)',
@@ -125,7 +125,7 @@ class Database:
         return commission_id
     
     def update_commission(self, commission_id, user_id, sale_date, unlisted_sales, loans, third_party_sales):
-        calculated_commission = (loans / 3) + (unlisted_sales / 3) + (third_party_sales)
+        calculated_commission = (loans / 3) + (unlisted_sales / 3) + third_party_sales
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute('UPDATE commissions SET sale_date=?, unlisted_sales=?, loans=?, third_party_sales=?, calculated_commission=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id=?',
@@ -182,18 +182,74 @@ class Database:
         employees = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return employees
-
-def delete_user(self, user_id):
+    
+    def delete_user(self, user_id):
+        """Delete employee and all related data"""
         conn = self.get_connection()
         cursor = conn.cursor()
         # First delete all commissions by this user
         cursor.execute('DELETE FROM commissions WHERE user_id=?', (user_id,))
         # Then delete all sessions by this user
         cursor.execute('DELETE FROM sessions WHERE user_id=?', (user_id,))
-        # Finally delete the user
+        # Finally delete the user (only if employee)
         cursor.execute('DELETE FROM users WHERE id=? AND role="employee"', (user_id,))
         conn.commit()
         affected = cursor.rowcount
         conn.close()
         return affected > 0
+    
+    def get_monthly_totals(self, employee_id=None, months=1):
+        """Get monthly commission totals (approved only)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        if employee_id:
+            # For specific employee
+            cursor.execute('''
+                SELECT 
+                    strftime('%Y-%m', sale_date) as month,
+                    SUM(calculated_commission) as total_commission,
+                    COUNT(*) as total_entries
+                FROM commissions 
+                WHERE user_id=? 
+                AND status='approved' 
+                AND sale_date >= date("now", "-" || ? || " months")
+                GROUP BY strftime('%Y-%m', sale_date)
+                ORDER BY month DESC
+            ''', (employee_id, months))
+        else:
+            # For all employees (admin view)
+            cursor.execute('''
+                SELECT 
+                    u.full_name as employee_name,
+                    u.id as employee_id,
+                    strftime('%Y-%m', c.sale_date) as month,
+                    SUM(c.calculated_commission) as total_commission,
+                    COUNT(*) as total_entries
+                FROM commissions c
+                JOIN users u ON c.user_id = u.id
+                WHERE c.status='approved'
+                AND c.sale_date >= date("now", "-" || ? || " months")
+                GROUP BY u.id, strftime('%Y-%m', c.sale_date)
+                ORDER BY month DESC, u.full_name
+            ''', (months,))
+        
+        totals = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return totals
+    
+    def admin_create_commission(self, user_id, sale_date, unlisted_sales, loans, third_party_sales, status='approved'):
+        """Admin can create commission for any employee with custom status"""
+        calculated_commission = (loans / 3) + (unlisted_sales / 3) + third_party_sales
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO commissions 
+            (user_id, sale_date, unlisted_sales, loans, third_party_sales, calculated_commission, status) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (user_id, sale_date, unlisted_sales, loans, third_party_sales, calculated_commission, status))
+        conn.commit()
+        commission_id = cursor.lastrowid
+        conn.close()
+        return commission_id
     
