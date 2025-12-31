@@ -39,6 +39,10 @@ class UpdateStatusRequest(BaseModel):
     commission_id: int
     status: str
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
 def get_current_user(authorization: Optional[str] = Header(None)):
     if not authorization:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -80,6 +84,20 @@ def create_user(request: CreateUserRequest, _: dict = Depends(require_admin)):
 @app.get("/api/users/employees")
 def get_employees(_: dict = Depends(require_admin)):
     return {"employees": db.get_all_employees()}
+
+@app.put("/api/auth/change-password")
+def change_password(request: ChangePasswordRequest, current_user: dict = Depends(get_current_user)):
+    """Change current user's password"""
+    # Verify current password
+    user = db.verify_user(current_user["username"], request.current_password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+    
+    # Update password
+    if not db.change_password(current_user["user_id"], request.new_password):
+        raise HTTPException(status_code=400, detail="Failed to change password")
+    
+    return {"message": "Password changed successfully"}
 
 @app.delete("/api/users/{user_id}")
 def delete_user(user_id: int, _: dict = Depends(require_admin)):
