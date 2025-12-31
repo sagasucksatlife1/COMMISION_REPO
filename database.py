@@ -252,4 +252,14 @@ class Database:
         commission_id = cursor.lastrowid
         conn.close()
         return commission_id
-    
+        
+    def change_password(self, user_id, new_password):
+        """Change user password"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        password_hash = self.hash_password(new_password)
+        cursor.execute('UPDATE users SET password_hash=? WHERE id=?', (password_hash, user_id))
+        conn.commit()
+        affected = cursor.rowcount
+        conn.close()
+        return affected > 0
