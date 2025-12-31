@@ -112,6 +112,27 @@ def get_my_commissions(months: int = 1, current_user: dict = Depends(get_current
 def get_all_commissions(months: int = 1, employee_id: Optional[int] = None, _: dict = Depends(require_admin)):
     return {"commissions": db.get_all_commissions(months, employee_id)}
 
+@app.get("/api/commissions/monthly-totals")
+def get_monthly_totals(months: int = 1, employee_id: Optional[int] = None, current_user: dict = Depends(get_current_user)):
+    """Get monthly commission totals (approved only)"""
+    # If regular employee, only show their own totals
+    if current_user["role"] == "employee":
+        employee_id = current_user["user_id"]
+    return {"totals": db.get_monthly_totals(employee_id, months)}
+
+@app.post("/api/commissions/admin-create")
+def admin_create_commission(request: CommissionRequest, employee_id: int, _: dict = Depends(require_admin)):
+    """Admin creates commission for any employee"""
+    commission_id = db.admin_create_commission(
+        employee_id, 
+        request.sale_date, 
+        request.unlisted_sales, 
+        request.loans, 
+        request.third_party_sales,
+        status='approved'  # Admin-created commissions are auto-approved
+    )
+    return {"message": "Commission created", "commission_id": commission_id}
+
 @app.put("/api/commissions/status")
 def update_status(request: UpdateStatusRequest, _: dict = Depends(require_admin)):
     if not db.update_commission_status(request.commission_id, request.status):
