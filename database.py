@@ -1,53 +1,62 @@
-import sqlite3
+import os
+import psycopg2
+import psycopg2.extras
 from datetime import datetime
 import hashlib
 import secrets
 
 class Database:
-    def __init__(self, db_name="/tmp/commission_system.db"):  # Changed to /data/ for Render
-        self.db_name = db_name
+    def __init__(self):
+        self.db_url = os.getenv("DATABASE_URL")
+        if not self.db_url:
+            raise Exception("DATABASE_URL environment variable not set")
+        self.conn = psycopg2.connect(self.db_url)
+        self.conn.autocommit = True
         self.init_db()
     
-    def get_connection(self):
-        conn = sqlite3.connect(self.db_name)
-        conn.row_factory = sqlite3.Row
-        return conn
+    def cursor(self):
+        return self.conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     
     def init_db(self):
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+    with self.cursor() as cur:
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
-            role TEXT NOT NULL CHECK(role IN ('employee', 'admin')),
+            role TEXT NOT NULL CHECK(role IN ('employee','admin')),
             full_name TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )''')
-        cursor.execute('''CREATE TABLE IF NOT EXISTS commissions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS commissions (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
             sale_date DATE NOT NULL,
-            unlisted_sales REAL NOT NULL DEFAULT 0,
-            loans REAL NOT NULL DEFAULT 0,
-            third_party_sales REAL NOT NULL DEFAULT 0,
-            calculated_commission REAL NOT NULL,
-            status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id)
-        )''')
-        cursor.execute('''CREATE TABLE IF NOT EXISTS sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
+            unlisted_sales NUMERIC DEFAULT 0,
+            loans NUMERIC DEFAULT 0,
+            third_party_sales NUMERIC DEFAULT 0,
+            calculated_commission NUMERIC NOT NULL,
+            status TEXT DEFAULT 'pending'
+                CHECK(status IN ('pending','approved','rejected')),
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS sessions (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
             token TEXT UNIQUE NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            expires_at TIMESTAMP NOT NULL,
-            FOREIGN KEY (user_id) REFERENCES users(id)
-        )''')
-        conn.commit()
-        conn.close()
-        self.create_default_admin()
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            expires_at TIMESTAMPTZ NOT NULL
+        )
+        """)
+
+    self.create_default_admin()
     
     def hash_password(self, password):
         return hashlib.sha256(password.encode()).hexdigest()
